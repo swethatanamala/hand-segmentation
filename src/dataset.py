@@ -10,8 +10,10 @@ class EgoHandsDataset(Dataset):
     def __init__(self, data_folder, mode="train", data_limit=None, transforms=None):
         self.transforms = transforms
         self.data_folder = data_folder
-        self.all_images = sorted(glob(f"{data_folder}/_LABELLED_SAMPLES/*/*.jpg"))
-        self.all_masks = sorted(glob(f"{data_folder}/masks/*/*.npy"))
+        self.all_images = sorted(glob(f"{data_folder}/images/*/*.jpg"))
+        #self.all_masks = sorted(glob(f"{data_folder}/masks/*/*.npy"))
+        self.all_masks = [os.path.join(data_folder, "masks", x.split('/')[-2:])[:-len('.jpg')] + "_mask.npy"
+                          for x in self.all_images]
         self.train_val_dict = self.get_split()
         self.mode = mode
         if data_limit:
@@ -47,10 +49,10 @@ class EgoHandsDataset(Dataset):
         img_name = os.path.basename(img_path)[:-len(".jpg")]
         mask_name = os.path.basename(mask_path)[:-len("_mask.npy")]
         assert img_name == mask_name, "image and mask should match"
-        img = cv2.imread(img_path)
+        img = cv2.imread(img_path) / 255
         mask = np.load(mask_path)
         if self.transforms:
-            transformed = self.transforms[self.mode]({"image": img, "target": mask}, seed=45)
+            transformed = self.transforms[self.mode]({"image": img, "target": mask})
             return transformed["image"], transformed["target"]
         else:
             return img, mask

@@ -1,6 +1,8 @@
 import numpy as np
 import cv2
 from numbers import Number
+#from PIL import Image, ImageEnhance
+from scipy import ndimage as ndi
 
 class NDTransform(object):
     """Base class for all numpy based transforms.
@@ -109,7 +111,6 @@ class NDTransform(object):
                         is_label = True
                     else:
                         is_label = False
-
                     data[k] = self._transform(img.copy(), is_label, **params)
             return data
         
@@ -219,6 +220,90 @@ class RandomIntensityJitter(NDTransform):
 
             return img
         
+class RandomBrightnessJitter(RandomIntensityJitter):
+    def __init__(self, intensity):
+        super(RandomBrightnessJitter, self).__init__(brightness=intensity)
+
+
+class RandomContrastJitter(RandomIntensityJitter):
+    def __init__(self, intensity):
+        super(RandomContrastJitter, self).__init__(contrast=intensity)
+
+
+class RandomSaturationJitter(RandomIntensityJitter):
+    def __init__(self, intensity):
+        super(RandomSaturationJitter, self).__init__(saturation=intensity)
+
+
+class RandomGammaJitter(RandomIntensityJitter):
+    def __init__(self, intensity):
+        super(RandomGammaJitter, self).__init__(gamma=intensity)
+
+
+class RandomNoise(NDTransform):
+    """Add random noise to the image.
+
+    Parameters
+    ----------
+    intensity: float
+        Float in [0, 1]. Peak standard deviation for the gaussian noise.
+    mode: str
+        One of ('white', 'crop'). White is usual white noise. Crop adds noise
+        only in regions which are not completely black or white.
+    """
+    def __init__(self, intensity=0.25, mode='turbulent'):
+        self.intensity = intensity
+        self.mode = mode
+
+    def _get_params(self, h, w, seed=None):
+        rng = np.random.RandomState(seed)
+        scale = rng.uniform(0, self.intensity)
+        return {'scale': scale,
+                'cell_size_scale': 2 ** rng.randint(1, 4)}
+
+    def _transform(self, img, is_label, scale, cell_size_scale):
+        if is_label:
+            return img
+        else:
+            if self.mode == 'white':
+                noise = np.random.normal(loc=0, scale=scale, size=img.shape)
+                return img + noise
+            elif self.mode == 'crop':
+                crop = (img > 0.05) & (img < 0.95)
+                noise = np.random.normal(
+                    loc=0, scale=scale * crop, size=img.shape)
+                return img + noise
+            elif self.mode == 'turbulent':
+                # https://lodev.org/cgtutor/randomnoise.html
+                cell_scales = np.geomspace(
+                    start=1, stop=cell_size_scale,
+                    num=int(np.log2(cell_size_scale) + 1)
+                )
+                noise = 0
+                for cell_scale in cell_scales:
+                    noise_shape = (
+                        int(img.shape[0] / cell_scale),
+                        int(img.shape[1] / cell_scale)
+                    ) + img.shape[2:]
+                    noise_low_res = np.random.normal(
+                        loc=0, scale=scale, size=noise_shape)
+                    noise = noise + ndi.zoom(
+                        noise_low_res,
+                        zoom=tuple(x / y for x, y in
+                                   zip(img.shape, noise_shape)),
+                        order=1
+                    )
+
+                noise = noise / len(cell_scales)
+                return img + noise
+            elif self.mode == 'hct_thin':
+                noise = np.random.normal(loc=0, scale=scale, size=img.shape)
+                noise = ndi.filters.convolve(noise, NOISE_FILTER)
+                return img + noise
+            else:
+                raise NotImplementedError(f'{self.mode} not implemented')
+
+
 class Clip(NDTransform):
     """Clip numpy array by a low and high value.
 
