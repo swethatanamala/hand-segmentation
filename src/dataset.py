@@ -1,4 +1,5 @@
 import cv2
+import random
 import numpy as np
 import os
 import torch
@@ -15,7 +16,8 @@ class EgoHandsDataset(Dataset):
         self.transforms = transforms
         self.data_folder = data_folder
         self.all_images = sorted(glob(f"{data_folder}/images/*/*.jpg"))
-        #self.all_masks = sorted(glob(f"{data_folder}/masks/*/*.npy"))
+        random.seed(42)
+        random.shuffle(self.all_images)
         self.all_masks = [os.path.join(data_folder, "masks", '/'.join(x.split('/')[-2:])[:-len('.jpg')] + "_mask.npy")
                           for x in self.all_images]
         self.train_val_dict = self.get_split()
@@ -97,8 +99,8 @@ def get_dataloaders(args, folders):
             #tsfms.RandomBrightnessJitter(1),
             #tsfms.RandomSaturationJitter(1),
             #tsfms.RandomContrastJitter(1),
-            #tsfms.RandomIntensityJitter(0.9, 0.9, 0.9),
-            #tsfms.RandomNoise(0.2),
+            tsfms.RandomIntensityJitter(0.9, 0.9, 0.9),
+            tsfms.RandomNoise(0.2),
             #tsfms.RandomSizedCrop(512, frac_range=[0.08, 1]),
             tsfms.RandomRotate(30),
             tsfms.RandomHorizontalFlip(),
