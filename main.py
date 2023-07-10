@@ -52,6 +52,6 @@ num_epochs = 100  # Specify the number of training epochs
 criterion = nn.CrossEntropyLoss()  # Define your loss function
 optimizer = optim.SGD(model.parameters(), lr=0.1, momentum=0.9)  # Define your optimizer
 scheduler = StepLR(optimizer, step_size=10, gamma=0.5)
-device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")  # Choose your device
+device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")  # Choose your device
 main(model, dataloaders, num_epochs, criterion, optimizer, scheduler, device, args, writer)
 writer.close()

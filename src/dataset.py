@@ -13,7 +13,6 @@ from torch.utils.data import DataLoader
 
 class EgoHandsDataset(Dataset):
     def __init__(self, data_folder, mode="train", data_limit=None, transforms=None):
-        self.transforms = transforms
         self.data_folder = data_folder
         self.all_images = sorted(glob(f"{data_folder}/images/*/*.jpg"))
         random.seed(42)
@@ -68,7 +67,51 @@ class EgoHandsDataset(Dataset):
             return transformed["image"], transformed["target"]
         else:
             return img, mask
+
+class NoHandCookingDataset(Dataset):
+    def __init__(self, data_folder, mode="train", data_limit=None, transforms=None):
+        self.data_folder = data_folder
+        self.all_images = sorted(glob(f"{data_folder}/*/none_with_out_hands/*.jpg"))
+        random.seed(42)
+        random.shuffle(self.all_images)
+        self.train_val_dict = self.get_split()
+        self.mode = mode
+        if data_limit:
+            self.train_val_dict[self.mode]["images"] = self.train_val_dict[self.mode]["images"][:data_limit]
+        self.images = self.train_val_dict[self.mode]["images"]
+        self.transforms = transforms
         
+    def get_split(self):
+        names = sorted(list(set([os.path.basename(os.path.dirname(os.path.dirname(x))) 
+                                 for x in self.all_images])))
+        train_len = int(len(names) * 0.65) + 1
+        val_len = int(len(names) * 0.9)
+        train_val_dict = {"train": 
+                            {"images": [filepath for filepath in self.all_images
+                                       for name in names[:train_len] if name in filepath]},
+                         "val":
+                            {"images": [filepath for filepath in self.all_images
+                                       for name in names[train_len:val_len] if name in filepath]},
+                         "test":
+                            {"images": [filepath for filepath in self.all_images
+                                       for name in names[val_len:] if name in filepath]}
+                        }
+        return train_val_dict
+    
+    def __len__(self):
+        return len(self.images)
+    
+    def __getitem__(self, index):
+        img_path = self.images[index]
+        img = cv2.imread(img_path) / 255
+        mask = np.zeros((img.shape[0], img.shape[1]))
+        if self.transforms:
+            transformed = self.transforms[self.mode]({"image": img, "target": mask})
+            return transformed["image"], transformed["target"]
+        else:
+            return img, mask
+    
+
 class ConcatHandsDataset(Dataset):
     def __init__(self, folders_list, mode='train', data_limit=None, transforms=None,
                  root_cache_path='/cache/datanas1/swetha/'):
@@ -78,6 +121,8 @@ class ConcatHandsDataset(Dataset):
             EgoHandsDataset(os.path.join(root_cache_path, folder), mode, data_limit)
             for folder in tqdm(folders_list, desc='Creating dataset')
         ]
+        self.component_datasets.extend([NoHandCookingDataset("/cache/datanas1/swetha/youcook2/manual",
+                                                             mode, data_limit)])
         self.mode = mode
         self.concat_dataset = torch.utils.data.ConcatDataset(
             self.component_datasets)
@@ -99,8 +144,8 @@ def get_dataloaders(args, folders):
             #tsfms.RandomBrightnessJitter(1),
             #tsfms.RandomSaturationJitter(1),
             #tsfms.RandomContrastJitter(1),
-            tsfms.RandomIntensityJitter(0.9, 0.9, 0.9),
-            tsfms.RandomNoise(0.2),
+            #tsfms.RandomIntensityJitter(0.9, 0.9, 0.9),
+            #tsfms.RandomNoise(0.2),
             #tsfms.RandomSizedCrop(512, frac_range=[0.08, 1]),
             tsfms.RandomRotate(30),
             tsfms.RandomHorizontalFlip(),
